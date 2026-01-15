@@ -2,6 +2,42 @@
 
 import { useState, useRef, useEffect } from "react";
 
+// Web Speech API type declarations
+interface SpeechRecognitionResult {
+  [index: number]: { transcript: string };
+  length: number;
+}
+
+interface SpeechRecognitionResultList {
+  [index: number]: SpeechRecognitionResult;
+  length: number;
+}
+
+interface SpeechRecognitionEvent extends Event {
+  results: SpeechRecognitionResultList;
+}
+
+interface SpeechRecognitionErrorEvent extends Event {
+  error: string;
+}
+
+interface SpeechRecognition extends EventTarget {
+  continuous: boolean;
+  interimResults: boolean;
+  start(): void;
+  stop(): void;
+  onresult: ((event: SpeechRecognitionEvent) => void) | null;
+  onerror: ((event: SpeechRecognitionErrorEvent) => void) | null;
+  onend: (() => void) | null;
+}
+
+declare global {
+  interface Window {
+    SpeechRecognition?: new () => SpeechRecognition;
+    webkitSpeechRecognition?: new () => SpeechRecognition;
+  }
+}
+
 interface Message {
   role: "user" | "assistant";
   content: string;
@@ -17,7 +53,7 @@ const agents: Agent[] = [
   {
     id: "comms-advisor",
     name: "Communications Advisor",
-    description: "Messages & relationships",
+    description: "Messaging & relationship building",
   },
   {
     id: "research",
@@ -26,13 +62,13 @@ const agents: Agent[] = [
   },
   {
     id: "content",
-    name: "Content Creation Agent (LI & X)",
+    name: "Content Creation Agent",
     description: "LinkedIn & Twitter posts",
   },
   {
     id: "startup-mentor",
     name: "Startup Mentor",
-    description: "Brutally honest B2B advisor",
+    description: "Early stage B2B SaaS",
   },
 ];
 
@@ -43,11 +79,48 @@ export default function ChatPage() {
   const [loading, setLoading] = useState(false);
   const [threadId, setThreadId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [isListening, setIsListening] = useState(false);
+  const recognitionRef = useRef<SpeechRecognition | null>(null);
 
   // Auto-scroll to bottom
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  // Initialize speech recognition
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const SpeechRecognition =
+        window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (SpeechRecognition) {
+        recognitionRef.current = new SpeechRecognition();
+        recognitionRef.current.continuous = true;
+        recognitionRef.current.interimResults = true;
+
+        recognitionRef.current.onresult = (event: SpeechRecognitionEvent) => {
+          const transcript = Array.from(event.results)
+            .map((result: SpeechRecognitionResult) => result[0].transcript)
+            .join("");
+          setInput(transcript);
+        };
+
+        recognitionRef.current.onerror = (event: SpeechRecognitionErrorEvent) => {
+          console.error("Speech recognition error:", event.error);
+          setIsListening(false);
+        };
+
+        recognitionRef.current.onend = () => {
+          setIsListening(false);
+        };
+      }
+    }
+
+    return () => {
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+      }
+    };
+  }, []);
 
   // Reset thread when agent changes
   const handleAgentChange = (agent: Agent) => {
@@ -58,6 +131,12 @@ export default function ChatPage() {
 
   const sendMessage = async () => {
     if (!input.trim() || loading) return;
+
+    // Stop listening if active
+    if (isListening && recognitionRef.current) {
+      recognitionRef.current.stop();
+      setIsListening(false);
+    }
 
     const userMessage = input.trim();
     setInput("");
@@ -100,7 +179,25 @@ export default function ChatPage() {
     }
   };
 
-const getPlaceholderText = () => {
+  const toggleListening = () => {
+    if (!recognitionRef.current) {
+      alert(
+        "Speech recognition is not supported in your browser. Please use Chrome, Edge, or Safari."
+      );
+      return;
+    }
+
+    if (isListening) {
+      recognitionRef.current.stop();
+      setIsListening(false);
+    } else {
+      setInput("");
+      recognitionRef.current.start();
+      setIsListening(true);
+    }
+  };
+
+  const getPlaceholderText = () => {
     switch (selectedAgent.id) {
       case "comms-advisor":
         return 'Try: "Got a message from an investor asking about our progress"';
@@ -208,7 +305,31 @@ const getPlaceholderText = () => {
 
         {/* Input */}
         <div className="bg-white border-t p-4">
-          <div className="flex space-x-4">
+          <div className="flex space-x-2">
+            <button
+              onClick={toggleListening}
+              className={`px-4 py-3 rounded-lg transition ${
+                isListening
+                  ? "bg-red-500 text-white animate-pulse"
+                  : "bg-gray-100 hover:bg-gray-200 text-gray-600"
+              }`}
+              title={isListening ? "Stop listening" : "Start voice input"}
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                fill="none"
+                viewBox="0 0 24 24"
+                strokeWidth={1.5}
+                stroke="currentColor"
+                className="w-6 h-6"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M12 18.75a6 6 0 006-6v-1.5m-6 7.5a6 6 0 01-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 01-3-3V4.5a3 3 0 116 0v8.25a3 3 0 01-3 3z"
+                />
+              </svg>
+            </button>
             <input
               type="text"
               value={input}
@@ -216,8 +337,12 @@ const getPlaceholderText = () => {
               onKeyDown={(e) =>
                 e.key === "Enter" && !e.shiftKey && sendMessage()
               }
-              placeholder={`Message ${selectedAgent.name}...`}
-              className="flex-1 p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder={
+                isListening ? "Listening..." : `Message ${selectedAgent.name}...`
+              }
+              className={`flex-1 p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                isListening ? "border-red-300 bg-red-50" : ""
+              }`}
               disabled={loading}
             />
             <button
@@ -228,6 +353,11 @@ const getPlaceholderText = () => {
               Send
             </button>
           </div>
+          {isListening && (
+            <p className="text-sm text-red-500 mt-2 text-center">
+              🎤 Listening... Click the microphone or press Send when done
+            </p>
+          )}
         </div>
       </div>
     </div>
