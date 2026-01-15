@@ -41,6 +41,7 @@ declare global {
 interface Message {
   role: "user" | "assistant";
   content: string;
+  timestamp: Date;
 }
 
 interface Chat {
@@ -56,40 +57,76 @@ interface Agent {
   id: string;
   name: string;
   description: string;
-  avatar: string;
+  icon: "chat" | "search" | "edit" | "lightbulb";
   color: string;
+  bgColor: string;
 }
 
 const agents: Agent[] = [
   {
     id: "comms-advisor",
-    name: "Communications Advisor",
-    description: "Messaging & relationship building",
-    avatar: "💬",
-    color: "bg-blue-500",
+    name: "Comms Advisor",
+    description: "Messaging & relationships",
+    icon: "chat",
+    color: "text-rose-400",
+    bgColor: "bg-rose-100",
   },
   {
     id: "research",
     name: "Research Agent",
-    description: "Industry research & insights",
-    avatar: "🔍",
-    color: "bg-emerald-500",
+    description: "Industry insights",
+    icon: "search",
+    color: "text-emerald-400",
+    bgColor: "bg-emerald-100",
   },
   {
     id: "content",
-    name: "Content Creation Agent",
-    description: "LinkedIn & Twitter posts",
-    avatar: "✍️",
-    color: "bg-purple-500",
+    name: "Content Creator",
+    description: "LinkedIn & Twitter",
+    icon: "edit",
+    color: "text-violet-400",
+    bgColor: "bg-violet-100",
   },
   {
     id: "startup-mentor",
     name: "Startup Mentor",
-    description: "Early stage B2B SaaS",
-    avatar: "🎓",
-    color: "bg-amber-500",
+    description: "B2B SaaS guidance",
+    icon: "lightbulb",
+    color: "text-amber-400",
+    bgColor: "bg-amber-100",
   },
 ];
+
+const AgentIcon = ({ icon, className }: { icon: string; className?: string }) => {
+  switch (icon) {
+    case "chat":
+      return (
+        <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+        </svg>
+      );
+    case "search":
+      return (
+        <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+        </svg>
+      );
+    case "edit":
+      return (
+        <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+        </svg>
+      );
+    case "lightbulb":
+      return (
+        <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+        </svg>
+      );
+    default:
+      return null;
+  }
+};
 
 export default function ChatPage() {
   const [selectedAgent, setSelectedAgent] = useState<Agent>(agents[0]);
@@ -97,16 +134,26 @@ export default function ChatPage() {
   const [chats, setChats] = useState<Chat[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
-  const [expandedAgents, setExpandedAgents] = useState<string[]>(agents.map(a => a.id));
+  const [expandedAgents, setExpandedAgents] = useState<string[]>([agents[0].id]);
   const [isListening, setIsListening] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
 
   // Load chats from localStorage on mount
   useEffect(() => {
     const savedChats = localStorage.getItem("founder-os-chats");
     if (savedChats) {
-      setChats(JSON.parse(savedChats));
+      const parsed = JSON.parse(savedChats);
+      // Convert timestamp strings back to Date objects
+      const chatsWithDates = parsed.map((chat: Chat) => ({
+        ...chat,
+        messages: chat.messages.map((msg: Message) => ({
+          ...msg,
+          timestamp: new Date(msg.timestamp),
+        })),
+      }));
+      setChats(chatsWithDates);
     }
   }, []);
 
@@ -122,11 +169,18 @@ export default function ChatPage() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [activeChat?.messages]);
 
+  // Auto-resize textarea
+  useEffect(() => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = "auto";
+      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 150)}px`;
+    }
+  }, [input]);
+
   // Initialize speech recognition
   useEffect(() => {
     if (typeof window !== "undefined") {
-      const SpeechRecognition =
-        window.SpeechRecognition || window.webkitSpeechRecognition;
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
       if (SpeechRecognition) {
         recognitionRef.current = new SpeechRecognition();
         recognitionRef.current.continuous = true;
@@ -159,9 +213,7 @@ export default function ChatPage() {
 
   const toggleAgentExpanded = (agentId: string) => {
     setExpandedAgents((prev) =>
-      prev.includes(agentId)
-        ? prev.filter((id) => id !== agentId)
-        : [...prev, agentId]
+      prev.includes(agentId) ? prev.filter((id) => id !== agentId) : [...prev, agentId]
     );
   };
 
@@ -177,6 +229,9 @@ export default function ChatPage() {
     setChats((prev) => [newChat, ...prev]);
     setActiveChat(newChat);
     setSelectedAgent(agent);
+    if (!expandedAgents.includes(agent.id)) {
+      setExpandedAgents((prev) => [...prev, agent.id]);
+    }
   };
 
   const selectChat = (chat: Chat) => {
@@ -187,25 +242,30 @@ export default function ChatPage() {
 
   const deleteChat = (chatId: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    setChats((prev) => prev.filter((c) => c.id !== chatId));
+    const updatedChats = chats.filter((c) => c.id !== chatId);
+    setChats(updatedChats);
     if (activeChat?.id === chatId) {
       setActiveChat(null);
     }
-    // Update localStorage
-    const updatedChats = chats.filter((c) => c.id !== chatId);
     localStorage.setItem("founder-os-chats", JSON.stringify(updatedChats));
   };
 
   const generateTitle = (message: string): string => {
-    // Take first 30 chars of message as title
     const title = message.slice(0, 30);
     return title.length < message.length ? `${title}...` : title;
+  };
+
+  const getChatsForAgent = (agentId: string) => {
+    return chats.filter((chat) => chat.agentId === agentId);
+  };
+
+  const formatTime = (date: Date): string => {
+    return date.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true });
   };
 
   const sendMessage = async () => {
     if (!input.trim() || loading) return;
 
-    // Stop listening if active
     if (isListening && recognitionRef.current) {
       recognitionRef.current.stop();
       setIsListening(false);
@@ -214,7 +274,6 @@ export default function ChatPage() {
     const userMessage = input.trim();
     setInput("");
 
-    // Create new chat if none active
     let currentChat = activeChat;
     if (!currentChat) {
       currentChat = {
@@ -228,22 +287,18 @@ export default function ChatPage() {
       setChats((prev) => [currentChat!, ...prev]);
     }
 
-    // Update title if it's the first message
     if (currentChat.messages.length === 0) {
       currentChat = { ...currentChat, title: generateTitle(userMessage) };
     }
 
-    // Add user message
     const updatedMessages: Message[] = [
       ...currentChat.messages,
-      { role: "user", content: userMessage },
+      { role: "user", content: userMessage, timestamp: new Date() },
     ];
-    
+
     const updatedChat = { ...currentChat, messages: updatedMessages };
     setActiveChat(updatedChat);
-    setChats((prev) =>
-      prev.map((c) => (c.id === updatedChat.id ? updatedChat : c))
-    );
+    setChats((prev) => prev.map((c) => (c.id === updatedChat.id ? updatedChat : c)));
     setLoading(true);
 
     try {
@@ -268,14 +323,12 @@ export default function ChatPage() {
         threadId: data.threadId,
         messages: [
           ...updatedMessages,
-          { role: "assistant", content: data.message },
+          { role: "assistant", content: data.message, timestamp: new Date() },
         ],
       };
 
       setActiveChat(finalChat);
-      setChats((prev) =>
-        prev.map((c) => (c.id === finalChat.id ? finalChat : c))
-      );
+      setChats((prev) => prev.map((c) => (c.id === finalChat.id ? finalChat : c)));
     } catch (error) {
       console.error("Error:", error);
       const errorChat: Chat = {
@@ -285,13 +338,12 @@ export default function ChatPage() {
           {
             role: "assistant",
             content: "Sorry, something went wrong. Please try again.",
+            timestamp: new Date(),
           },
         ],
       };
       setActiveChat(errorChat);
-      setChats((prev) =>
-        prev.map((c) => (c.id === errorChat.id ? errorChat : c))
-      );
+      setChats((prev) => prev.map((c) => (c.id === errorChat.id ? errorChat : c)));
     } finally {
       setLoading(false);
     }
@@ -299,9 +351,7 @@ export default function ChatPage() {
 
   const toggleListening = () => {
     if (!recognitionRef.current) {
-      alert(
-        "Speech recognition is not supported in your browser. Please use Chrome, Edge, or Safari."
-      );
+      alert("Speech recognition is not supported in your browser. Please use Chrome, Edge, or Safari.");
       return;
     }
 
@@ -318,227 +368,180 @@ export default function ChatPage() {
   const getPlaceholderText = () => {
     switch (selectedAgent.id) {
       case "comms-advisor":
-        return 'Try: "Got a message from an investor asking about our progress"';
+        return "Ask me to draft messages, review emails, or plan your outreach...";
       case "research":
-        return 'Try: "What are the latest trends in AI hiring?"';
+        return "Ask me about market trends, competitors, or industry insights...";
       case "content":
-        return 'Try: "Write a LinkedIn post about structured interviews"';
+        return "Ask me to write LinkedIn posts, Twitter threads, or blog content...";
       case "startup-mentor":
-        return 'Try: "What should I be focused on right now?"';
+        return "Ask me about strategy, prioritization, or startup challenges...";
       default:
-        return `Start a conversation with ${selectedAgent.name}`;
+        return `Message ${selectedAgent.name}...`;
     }
   };
 
-  const getChatsForAgent = (agentId: string) => {
-    return chats.filter((chat) => chat.agentId === agentId);
-  };
-
   return (
-    <div className="flex h-screen bg-gray-50">
+    <div className="flex h-screen bg-slate-50/50">
       {/* Sidebar */}
-      <div className="w-72 bg-white border-r flex flex-col">
-        {/* Header */}
-        <div className="p-4 border-b">
-          <h1 className="text-xl font-bold text-gray-800">Founder OS</h1>
-          <p className="text-sm text-gray-500">Your AI advisory team</p>
+      <div className="w-80 bg-gradient-to-b from-slate-50 to-slate-100/50 border-r border-slate-200 flex flex-col">
+        {/* Logo */}
+        <div className="p-6">
+          <div className="flex items-center space-x-3">
+            <div className="w-10 h-10 bg-gradient-to-br from-violet-400 to-indigo-400 rounded-xl shadow-sm" />
+            <div>
+              <span className="font-semibold text-slate-800">Founder OS</span>
+              <p className="text-xs text-slate-500">Your AI advisory team</p>
+            </div>
+          </div>
         </div>
 
-        {/* Agents & Chats */}
-        <div className="flex-1 overflow-y-auto">
-          {agents.map((agent) => (
-            <div key={agent.id} className="border-b border-gray-100">
-              {/* Agent Header */}
+        {/* Agents */}
+        <div className="flex-1 overflow-y-auto px-4 space-y-3 pb-4">
+          {agents.map((agent) => {
+            const isExpanded = expandedAgents.includes(agent.id);
+            const agentChats = getChatsForAgent(agent.id);
+            const isSelected = selectedAgent.id === agent.id;
+
+            return (
               <div
-                className="flex items-center justify-between p-3 hover:bg-gray-50 cursor-pointer"
-                onClick={() => toggleAgentExpanded(agent.id)}
+                key={agent.id}
+                className={`rounded-2xl transition-all ${
+                  isSelected && isExpanded
+                    ? "bg-white shadow-sm border-2 border-violet-200"
+                    : "bg-white/60 hover:bg-white hover:shadow-sm"
+                }`}
               >
-                <div className="flex items-center space-x-3">
-                  <div
-                    className={`w-10 h-10 ${agent.color} rounded-full flex items-center justify-center text-xl`}
-                  >
-                    {agent.avatar}
-                  </div>
-                  <div>
-                    <div className="font-medium text-gray-800 text-sm">
-                      {agent.name}
-                    </div>
-                    <div className="text-xs text-gray-500">
-                      {agent.description}
-                    </div>
-                  </div>
-                </div>
-                <svg
-                  className={`w-4 h-4 text-gray-400 transition-transform ${
-                    expandedAgents.includes(agent.id) ? "rotate-180" : ""
-                  }`}
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
+                {/* Agent Header */}
+                <div
+                  className="flex items-center space-x-3 p-4 cursor-pointer"
+                  onClick={() => {
+                    setSelectedAgent(agent);
+                    toggleAgentExpanded(agent.id);
+                  }}
                 >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M19 9l-7 7-7-7"
-                  />
-                </svg>
-              </div>
-
-              {/* Agent's Chats */}
-              {expandedAgents.includes(agent.id) && (
-                <div className="bg-gray-50">
-                  {/* New Chat Button */}
-                  <button
-                    onClick={() => createNewChat(agent)}
-                    className="w-full flex items-center space-x-2 px-4 py-2 text-sm text-blue-600 hover:bg-blue-50 transition"
-                  >
-                    <svg
-                      className="w-4 h-4"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M12 4v16m8-8H4"
-                      />
-                    </svg>
-                    <span>New chat</span>
-                  </button>
-
-                  {/* Chat List */}
-                  {getChatsForAgent(agent.id).map((chat) => (
-                    <div
-                      key={chat.id}
-                      onClick={() => selectChat(chat)}
-                      className={`group flex items-center justify-between px-4 py-2 cursor-pointer transition ${
-                        activeChat?.id === chat.id
-                          ? "bg-blue-100 border-r-2 border-blue-500"
-                          : "hover:bg-gray-100"
-                      }`}
-                    >
-                      <span className="text-sm text-gray-700 truncate flex-1">
-                        {chat.title}
-                      </span>
-                      <button
-                        onClick={(e) => deleteChat(chat.id, e)}
-                        className="opacity-0 group-hover:opacity-100 p-1 hover:bg-red-100 rounded transition"
-                        title="Delete chat"
-                      >
-                        <svg
-                          className="w-4 h-4 text-red-500"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          stroke="currentColor"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                          />
-                        </svg>
-                      </button>
-                    </div>
-                  ))}
-
-                  {getChatsForAgent(agent.id).length === 0 && (
-                    <div className="px-4 py-2 text-xs text-gray-400 italic">
-                      No conversations yet
-                    </div>
+                  <div className={`w-11 h-11 ${agent.bgColor} rounded-xl flex items-center justify-center`}>
+                    <AgentIcon icon={agent.icon} className={`w-6 h-6 ${agent.color}`} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-medium text-slate-800">{agent.name}</div>
+                    <div className="text-xs text-slate-500">{agent.description}</div>
+                  </div>
+                  {!isExpanded && agentChats.length > 0 && (
+                    <span className="text-xs text-slate-400 bg-slate-100 px-2 py-1 rounded-full">
+                      {agentChats.length}
+                    </span>
                   )}
                 </div>
-              )}
-            </div>
-          ))}
+
+                {/* Expanded Content */}
+                {isExpanded && (
+                  <div className="px-4 pb-4 space-y-1">
+                    {agentChats.map((chat) => (
+                      <div
+                        key={chat.id}
+                        onClick={() => selectChat(chat)}
+                        className={`group flex items-center justify-between px-3 py-2.5 rounded-xl cursor-pointer transition ${
+                          activeChat?.id === chat.id
+                            ? "bg-violet-50 text-violet-700 font-medium"
+                            : "hover:bg-slate-50 text-slate-600"
+                        }`}
+                      >
+                        <span className="text-sm truncate flex-1">{chat.title}</span>
+                        <button
+                          onClick={(e) => deleteChat(chat.id, e)}
+                          className="opacity-0 group-hover:opacity-100 p-1 hover:bg-red-100 rounded-lg transition"
+                          title="Delete chat"
+                        >
+                          <svg className="w-4 h-4 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
+                      </div>
+                    ))}
+
+                    {/* New Chat Button */}
+                    <button
+                      onClick={() => createNewChat(agent)}
+                      className="w-full flex items-center space-x-2 px-3 py-2 text-sm text-violet-500 hover:text-violet-600 hover:bg-violet-50 rounded-xl transition"
+                    >
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                      </svg>
+                      <span>New chat</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       </div>
 
       {/* Main Chat Area */}
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col bg-white">
         {/* Header */}
-        <div className="bg-white border-b p-4 flex items-center space-x-3">
-          <div
-            className={`w-10 h-10 ${selectedAgent.color} rounded-full flex items-center justify-center text-xl`}
-          >
-            {selectedAgent.avatar}
-          </div>
-          <div>
-            <h1 className="text-lg font-semibold text-gray-800">
-              {selectedAgent.name}
-            </h1>
-            <p className="text-sm text-gray-500">{selectedAgent.description}</p>
+        <div className="px-8 py-4 border-b border-slate-100 flex items-center justify-between">
+          <div className="flex items-center space-x-4">
+            <div className={`w-11 h-11 ${selectedAgent.bgColor} rounded-xl flex items-center justify-center`}>
+              <AgentIcon icon={selectedAgent.icon} className={`w-6 h-6 ${selectedAgent.color}`} />
+            </div>
+            <div>
+              <h1 className="font-semibold text-slate-800">{selectedAgent.name}</h1>
+              <p className="text-sm text-slate-400">
+                {activeChat ? activeChat.title : selectedAgent.description}
+              </p>
+            </div>
           </div>
         </div>
 
-        {/* Messages */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        {/* Messages Area */}
+        <div className="flex-1 overflow-y-auto px-8 py-6 space-y-6">
           {(!activeChat || activeChat.messages.length === 0) && (
-            <div className="text-center text-gray-400 mt-20">
-              <div
-                className={`w-16 h-16 ${selectedAgent.color} rounded-full flex items-center justify-center text-3xl mx-auto mb-4`}
-              >
-                {selectedAgent.avatar}
+            <div className="h-full flex flex-col items-center justify-center text-center">
+              <div className={`w-16 h-16 ${selectedAgent.bgColor} rounded-2xl flex items-center justify-center mb-6`}>
+                <AgentIcon icon={selectedAgent.icon} className={`w-8 h-8 ${selectedAgent.color}`} />
               </div>
-              <p className="text-lg font-medium text-gray-600">
-                {selectedAgent.name}
-              </p>
-              <p className="text-sm mt-2 max-w-md mx-auto">
-                {getPlaceholderText()}
-              </p>
+              <h2 className="text-xl font-medium text-slate-700 mb-2">Start a conversation</h2>
+              <p className="text-slate-400 max-w-sm">{getPlaceholderText()}</p>
             </div>
           )}
 
           {activeChat?.messages.map((msg, i) => (
-            <div
-              key={i}
-              className={`flex ${
-                msg.role === "user" ? "justify-end" : "justify-start"
-              }`}
-            >
-              <div className="flex items-start space-x-2 max-w-2xl">
-                {msg.role === "assistant" && (
-                  <div
-                    className={`w-8 h-8 ${selectedAgent.color} rounded-full flex items-center justify-center text-sm flex-shrink-0`}
-                  >
-                    {selectedAgent.avatar}
+            <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
+              {msg.role === "assistant" ? (
+                <div className="flex space-x-3 max-w-2xl">
+                  <div className={`w-8 h-8 ${selectedAgent.bgColor} rounded-lg flex items-center justify-center flex-shrink-0 mt-1`}>
+                    <AgentIcon icon={selectedAgent.icon} className={`w-4 h-4 ${selectedAgent.color}`} />
                   </div>
-                )}
-                <div
-                  className={`p-4 rounded-2xl ${
-                    msg.role === "user"
-                      ? "bg-blue-600 text-white rounded-br-md"
-                      : "bg-white border shadow-sm rounded-bl-md"
-                  }`}
-                >
-                  <div className="whitespace-pre-wrap">{msg.content}</div>
+                  <div>
+                    <div className="bg-slate-50 px-5 py-4 rounded-2xl rounded-bl-md">
+                      <div className="text-slate-700 leading-relaxed whitespace-pre-wrap">{msg.content}</div>
+                    </div>
+                    <div className="text-xs text-slate-400 mt-1.5">{formatTime(msg.timestamp)}</div>
+                  </div>
                 </div>
-              </div>
+              ) : (
+                <div className="max-w-lg">
+                  <div className="bg-violet-500 text-white px-5 py-3 rounded-2xl rounded-br-md shadow-sm">
+                    <div className="whitespace-pre-wrap">{msg.content}</div>
+                  </div>
+                  <div className="text-xs text-slate-400 mt-1.5 text-right">{formatTime(msg.timestamp)}</div>
+                </div>
+              )}
             </div>
           ))}
 
           {loading && (
             <div className="flex justify-start">
-              <div className="flex items-start space-x-2">
-                <div
-                  className={`w-8 h-8 ${selectedAgent.color} rounded-full flex items-center justify-center text-sm`}
-                >
-                  {selectedAgent.avatar}
+              <div className="flex space-x-3">
+                <div className={`w-8 h-8 ${selectedAgent.bgColor} rounded-lg flex items-center justify-center`}>
+                  <AgentIcon icon={selectedAgent.icon} className={`w-4 h-4 ${selectedAgent.color}`} />
                 </div>
-                <div className="bg-white border shadow-sm p-4 rounded-2xl rounded-bl-md">
+                <div className="bg-slate-50 px-5 py-4 rounded-2xl rounded-bl-md">
                   <div className="flex space-x-2">
-                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" />
-                    <div
-                      className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"
-                      style={{ animationDelay: "0.1s" }}
-                    />
-                    <div
-                      className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"
-                      style={{ animationDelay: "0.2s" }}
-                    />
+                    <div className="w-2 h-2 bg-slate-300 rounded-full animate-bounce" />
+                    <div className="w-2 h-2 bg-slate-300 rounded-full animate-bounce" style={{ animationDelay: "0.1s" }} />
+                    <div className="w-2 h-2 bg-slate-300 rounded-full animate-bounce" style={{ animationDelay: "0.2s" }} />
                   </div>
                 </div>
               </div>
@@ -548,76 +551,60 @@ export default function ChatPage() {
           <div ref={messagesEndRef} />
         </div>
 
-        {/* Input */}
-        <div className="bg-white border-t p-4">
-          <div className="flex space-x-2 max-w-4xl mx-auto">
-            <button
-              onClick={toggleListening}
-              className={`px-4 py-3 rounded-xl transition ${
-                isListening
-                  ? "bg-red-500 text-white animate-pulse"
-                  : "bg-gray-100 hover:bg-gray-200 text-gray-600"
-              }`}
-              title={isListening ? "Stop listening" : "Start voice input"}
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                fill="none"
-                viewBox="0 0 24 24"
-                strokeWidth={1.5}
-                stroke="currentColor"
-                className="w-6 h-6"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M12 18.75a6 6 0 006-6v-1.5m-6 7.5a6 6 0 01-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 01-3-3V4.5a3 3 0 116 0v8.25a3 3 0 01-3 3z"
-                />
-              </svg>
-            </button>
-            <input
-              type="text"
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) =>
-                e.key === "Enter" && !e.shiftKey && sendMessage()
-              }
-              placeholder={
-                isListening
-                  ? "Listening..."
-                  : `Message ${selectedAgent.name}...`
-              }
-              className={`flex-1 p-3 border rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                isListening ? "border-red-300 bg-red-50" : ""
-              }`}
-              disabled={loading}
-            />
-            <button
-              onClick={sendMessage}
-              disabled={loading || !input.trim()}
-              className="px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition"
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                fill="none"
-                viewBox="0 0 24 24"
-                strokeWidth={2}
-                stroke="currentColor"
-                className="w-5 h-5"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5"
-                />
-              </svg>
-            </button>
+        {/* Input Area */}
+        <div className="px-8 py-5 border-t border-slate-100">
+          <div className="max-w-3xl mx-auto">
+            <div className={`bg-slate-50 rounded-2xl border transition-all ${
+              isListening 
+                ? "border-red-300 ring-2 ring-red-100" 
+                : "border-slate-200 focus-within:ring-2 focus-within:ring-violet-200 focus-within:border-violet-300 focus-within:bg-white"
+            }`}>
+              <textarea
+                ref={textareaRef}
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    sendMessage();
+                  }
+                }}
+                placeholder={isListening ? "Listening..." : `Message ${selectedAgent.name}...`}
+                rows={1}
+                className="w-full px-5 py-4 bg-transparent resize-none focus:outline-none text-slate-700 placeholder-slate-400"
+                disabled={loading}
+              />
+              <div className="flex items-center justify-between px-4 pb-3">
+                <div className="flex items-center space-x-1">
+                  <button
+                    onClick={toggleListening}
+                    className={`p-2 rounded-lg transition ${
+                      isListening
+                        ? "text-red-500 bg-red-100 animate-pulse"
+                        : "text-slate-400 hover:text-violet-500 hover:bg-violet-50"
+                    }`}
+                    title={isListening ? "Stop listening" : "Voice input"}
+                  >
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                    </svg>
+                  </button>
+                </div>
+                <button
+                  onClick={sendMessage}
+                  disabled={loading || !input.trim()}
+                  className="px-5 py-2 bg-violet-500 hover:bg-violet-600 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-xl font-medium transition shadow-sm"
+                >
+                  Send
+                </button>
+              </div>
+            </div>
+            {isListening && (
+              <p className="text-sm text-red-500 mt-2 text-center">
+                🎤 Listening... Click the microphone or press Send when done
+              </p>
+            )}
           </div>
-          {isListening && (
-            <p className="text-sm text-red-500 mt-2 text-center">
-              🎤 Listening... Click the microphone or press Send when done
-            </p>
-          )}
         </div>
       </div>
     </div>
