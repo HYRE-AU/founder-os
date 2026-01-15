@@ -16,7 +16,7 @@ interface Agent {
 const agents: Agent[] = [
   {
     id: "comms-advisor",
-    name: "Comms Advisor",
+    name: "Communications Advisor",
     description: "Messages & relationships",
   },
   {
@@ -26,8 +26,13 @@ const agents: Agent[] = [
   },
   {
     id: "content",
-    name: "Content Agent",
+    name: "Content Creation Agent (LI & X)",
     description: "LinkedIn & Twitter posts",
+  },
+  {
+    id: "startup-mentor",
+    name: "Startup Mentor",
+    description: "Brutally honest B2B advisor",
   },
 ];
 
@@ -95,7 +100,7 @@ export default function ChatPage() {
     }
   };
 
-  const getPlaceholderText = () => {
+const getPlaceholderText = () => {
     switch (selectedAgent.id) {
       case "comms-advisor":
         return 'Try: "Got a message from an investor asking about our progress"';
@@ -103,6 +108,8 @@ export default function ChatPage() {
         return 'Try: "What are the latest trends in AI hiring?"';
       case "content":
         return 'Try: "Write a LinkedIn post about structured interviews"';
+      case "startup-mentor":
+        return 'Try: "What should I be focused on right now?"';
       default:
         return `Start a conversation with ${selectedAgent.name}`;
     }
