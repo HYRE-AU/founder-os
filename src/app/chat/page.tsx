@@ -19,6 +19,16 @@ const agents: Agent[] = [
     name: "Comms Advisor",
     description: "Messages & relationships",
   },
+  {
+    id: "research",
+    name: "Research Agent",
+    description: "Industry research & insights",
+  },
+  {
+    id: "content",
+    name: "Content Agent",
+    description: "LinkedIn & Twitter posts",
+  },
 ];
 
 export default function ChatPage() {
@@ -85,11 +95,24 @@ export default function ChatPage() {
     }
   };
 
+  const getPlaceholderText = () => {
+    switch (selectedAgent.id) {
+      case "comms-advisor":
+        return 'Try: "Got a message from an investor asking about our progress"';
+      case "research":
+        return 'Try: "What are the latest trends in AI hiring?"';
+      case "content":
+        return 'Try: "Write a LinkedIn post about structured interviews"';
+      default:
+        return `Start a conversation with ${selectedAgent.name}`;
+    }
+  };
+
   return (
     <div className="flex h-screen bg-gray-50">
       {/* Sidebar - Agent Selector */}
       <div className="w-64 bg-white border-r p-4">
-        <h2 className="text-lg font-semibold mb-4">Agents</h2>
+        <h2 className="text-lg font-semibold mb-4">Founder OS</h2>
         <div className="space-y-2">
           {agents.map((agent) => (
             <button
@@ -131,13 +154,8 @@ export default function ChatPage() {
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
           {messages.length === 0 && (
             <div className="text-center text-gray-400 mt-20">
-              <p className="text-lg">
-                Start a conversation with {selectedAgent.name}
-              </p>
-              <p className="text-sm mt-2">
-                Try: &quot;Got a message from an investor asking about our
-                progress&quot;
-              </p>
+              <p className="text-lg">👋 Hey Shenny!</p>
+              <p className="text-sm mt-2">{getPlaceholderText()}</p>
             </div>
           )}
 
